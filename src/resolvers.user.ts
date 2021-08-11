@@ -7,10 +7,19 @@ import {
   Context,
   InputType,
   Field,
+  GqlExecutionContext,
 } from '@nestjs/graphql'
-import { Inject } from '@nestjs/common'
+import { createParamDecorator, ExecutionContext } from '@nestjs/common'
 import { User } from './user'
 import { PrismaService } from './prisma.service'
+import { AuthService } from './auth/auth.service'
+
+export const CurrentUser = createParamDecorator(
+  (data: unknown, context: ExecutionContext) => {
+    const ctx = GqlExecutionContext.create(context);
+    return ctx.getContext().req.user;
+  },
+);
 
 @InputType()
 class UserCreateInput {
@@ -23,7 +32,7 @@ class UserCreateInput {
 
 @Resolver(User)
 export class UserResolver {
-  constructor(@Inject(PrismaService) private prismaService: PrismaService) { }
+  constructor( private prismaService: PrismaService, private authService: AuthService ) { }
 
   @Mutation((returns) => User)
   async signupUser(
@@ -42,5 +51,10 @@ export class UserResolver {
   @Query((returns) => [User], { nullable: true })
   async allUsers(@Context() ctx): Promise<User[]> {
     return this.prismaService.user.findMany()
+  }
+
+  @Query((returns) => String)
+  async login(@Context() ctx, @Args('email') email: string, @Args('password') password: string ): Promise<string> {
+    return (await this.authService.login( { username: email, password })).access_token
   }
 }
